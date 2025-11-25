@@ -1,17 +1,16 @@
-name: Android Build (assembleDebug)
+name: Android Build
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -20,22 +19,14 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Ensure gradlew (if present) is executable
-        run: |
-          if [ -f ./gradlew ]; then
-            chmod +x ./gradlew || true
-            ls -l ./gradlew || true
-          else
-            echo "gradlew not found — using gradle action to install Gradle"
-          fi
-
-      - name: Run Gradle assembleDebug (using Gradle Action)
+      - name: Build with Gradle Action (no wrapper)
         uses: gradle/gradle-build-action@v2
         with:
+          gradle-version: 8.6
           arguments: assembleDebug
 
-      - name: Upload debug APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
+          name: debug-apk
           path: app/build/outputs/apk/debug/*.apk
