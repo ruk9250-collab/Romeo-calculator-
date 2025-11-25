@@ -11,29 +11,28 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
-        # ID: checkout -- yeh action output generate karta hai
 
-      - name: Set up JDK 17 & Configure Gradle
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
-          cache: 'gradle' 
+          java-version: 17
 
-      # -- Yahan permission set ho chuki hai, aur yeh step abhi bhi zaroori hai --
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-        if: success() && hashFiles('gradlew') != '' 
-        # Yeh step pehle bhi chala tha, ab phir chalega.
+      - name: Ensure gradlew (if present) is executable
+        run: |
+          if [ -f ./gradlew ]; then
+            chmod +x ./gradlew || true
+            ls -l ./gradlew || true
+          else
+            echo "gradlew not found — using gradle action to install Gradle"
+          fi
 
-      # === Yahan humne 'gradle-build-action' ko hata diya hai ===
-      - name: Run Gradle assembleDebug (Native Command)
-        # Seedhe './gradlew' command use karein. Yeh sabse zyada reliable hai.
-        run: ./gradlew assembleDebug 
-        # Agar aapka project root folder mein nahi hai, toh 'cd' command use karna pad sakta hai.
-        # Lekin agar aapka build.gradle root mein hai, toh yahi kaam karega.
+      - name: Run Gradle assembleDebug (using Gradle Action)
+        uses: gradle/gradle-build-action@v2
+        with:
+          arguments: assembleDebug
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
