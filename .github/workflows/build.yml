@@ -1,4 +1,4 @@
-name: Android Build (dump logs)
+name: Android Build (upload first error)
 
 on:
   push:
@@ -55,7 +55,6 @@ jobs:
             exit 1
           fi
           chmod +x "$SDKMAN" || true
-          # Accept licenses
           printf '%s\n' y y y | bash "$SDKMAN" --sdk_root="$ANDROID_SDK_ROOT" --licenses || true
           bash "$SDKMAN" --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
         shell: bash
@@ -73,17 +72,40 @@ jobs:
           ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
         run: |
           set -o pipefail
-          # run Gradle with stacktrace and info, capture everything to build.log
           gradle --version
           gradle assembleDebug --stacktrace --info --no-daemon 2>&1 | tee build.log
           echo "---- EOF OF LOG ----"
           tail -n 200 build.log || true
         shell: bash
 
-      - name: Upload build log artifact
+      - name: Extract first red error block
+        run: |
+          # find the first occurrence of "FAIL" or "Caused by" or ": FAILED" - print that line and the following 40 lines
+          FIRST_LINE=$(grep -nE "FAIL|: FAILED|Caused by:" build.log | head -n1 | cut -d: -f1 || true)
+          if [ -z "$FIRST_LINE" ]; then
+            echo "No obvious red markers found, show last 200 lines" > first-error.txt
+            tail -n 200 build.log >> first-error.txt
+          else
+            START=$(( FIRST_LINE - 3 ))
+            if [ $START -lt 1 ]; then START=1; fi
+            echo "Extracting from line $START" > first-error.txt
+            sed -n "${START},$(( FIRST_LINE + 80 ))p" build.log >> first-error.txt
+          fi
+          echo "--- END ---" >> first-error.txt
+          echo "first-error.txt created with size:" >> first-error.txt
+          ls -lh first-error.txt >> first-error.txt || true
+        shell: bash
+
+      - name: Upload first error snippet
         uses: actions/upload-artifact@v4
         with:
-          name: build-log
+          name: first-error
+          path: first-error.txt
+
+      - name: Upload full build log
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-build-log
           path: build.log
 
       - name: Upload debug APK (if produced)
