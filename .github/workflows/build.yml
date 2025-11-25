@@ -20,6 +20,15 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      - name: Ensure gradlew is executable
+        run: |
+          if [ -f ./gradlew ]; then
+            chmod +x ./gradlew || true
+            ls -l ./gradlew || true
+          else
+            echo "gradlew not found, continuing (gradle action will install gradle)"
+          fi
+
       - name: Run Gradle assembleDebug (gradle action)
         uses: gradle/gradle-build-action@v2
         with:
