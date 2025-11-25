@@ -1,4 +1,4 @@
-name: Android Build (fixed SDK install + Gradle)
+name: Android Build (no wrapper, stable)
 
 on:
   push:
@@ -36,61 +36,34 @@ jobs:
           cd /tmp
           wget -q -O cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
           unzip -q cmdline-tools.zip -d "$ANDROID_SDK_ROOT/cmdline-tools"
-          # normalize path to .../cmdline-tools/latest
           if [ -d "$ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools" ]; then
             mv "$ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools" "$ANDROID_SDK_ROOT/cmdline-tools/latest" || true
           fi
           ls -la "$ANDROID_SDK_ROOT/cmdline-tools"
         shell: bash
 
-      - name: Make sdkmanager executable and install SDK packages (safe call)
+      - name: Install required SDK packages
         env:
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
+          PATH: ${{ env.ANDROID_SDK_ROOT }}/cmdline-tools/latest/bin:${{ env.PATH }}
         run: |
           SDKMAN="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-          if [ ! -f "$SDKMAN" ]; then
-            echo "sdkmanager not found at $SDKMAN"
-            ls -la "$ANDROID_SDK_ROOT/cmdline-tools" || true
-            exit 1
-          fi
           chmod +x "$SDKMAN" || true
-          # Accept licenses (use printf instead of yes, call sdkmanager with bash explicitly)
           printf '%s\n' y y y | bash "$SDKMAN" --sdk_root="$ANDROID_SDK_ROOT" --licenses || true
-          # Install required packages
           bash "$SDKMAN" --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-          # show installed packages (non-fatal)
           bash "$SDKMAN" --sdk_root="$ANDROID_SDK_ROOT" --list || true
         shell: bash
 
-      - name: Make gradlew executable if present
-        run: |
-          if [ -f ./gradlew ]; then chmod +x ./gradlew || true; ls -l ./gradlew; else echo "no gradlew present"; fi
-        shell: bash
-
-      - name: Ensure Gradle available (setup via action)
+      - name: Ensure Gradle available (via action) — do NOT use wrapper
         uses: gradle/gradle-build-action@v2
         id: gradle_setup
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
+          use-gradle-wrapper: false
 
-      - name: Optionally update wrapper (creates wrapper files matching GRADLE_VERSION)
+      - name: Build (assembleDebug) with verbose logs (using installed Gradle)
         run: |
-          # prefer using local ./gradlew if present, else use gradle installed by action
-          if [ -f ./gradlew ]; then
-            ./gradlew wrapper --gradle-version=${GRADLE_VERSION} --distribution-type=all || true
-          else
-            gradle wrapper --gradle-version=${GRADLE_VERSION} --distribution-type=all || true
-          fi
-        shell: bash
-
-      - name: Build (assembleDebug) with verbose logs
-        run: |
-          # prefer wrapper if present for consistent results
-          if [ -f ./gradlew ]; then
-            ./gradlew assembleDebug --stacktrace --info --no-daemon
-          else
-            gradle assembleDebug --stacktrace --info --no-daemon
-          fi
+          gradle --version
+          gradle assembleDebug --stacktrace --info --no-daemon
         env:
           ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
           ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
