@@ -1,3 +1,4 @@
+// root build.gradle (Groovy DSL)
 buildscript {
     ext {
         kotlin_version = '1.9.10'
