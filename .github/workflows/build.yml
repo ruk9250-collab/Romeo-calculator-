@@ -1,4 +1,4 @@
-name: Android Build (SDK via sdkmanager, no emulator)
+name: Android Build (dump logs)
 
 on:
   push:
@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -53,10 +55,9 @@ jobs:
             exit 1
           fi
           chmod +x "$SDKMAN" || true
-          # Accept licenses using printf instead of yes (reliable on runner)
+          # Accept licenses
           printf '%s\n' y y y | bash "$SDKMAN" --sdk_root="$ANDROID_SDK_ROOT" --licenses || true
           bash "$SDKMAN" --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-          bash "$SDKMAN" --sdk_root="$ANDROID_SDK_ROOT" --list || true
         shell: bash
 
       - name: Ensure Gradle provided by action (do NOT use wrapper)
@@ -66,16 +67,27 @@ jobs:
           gradle-version: ${{ env.GRADLE_VERSION }}
           use-gradle-wrapper: false
 
-      - name: Build (assembleDebug) with verbose logs
-        run: |
-          gradle --version
-          gradle assembleDebug --stacktrace --info --no-daemon
+      - name: Run Gradle assembleDebug and save full console to build.log
         env:
           ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
           ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
+        run: |
+          set -o pipefail
+          # run Gradle with stacktrace and info, capture everything to build.log
+          gradle --version
+          gradle assembleDebug --stacktrace --info --no-daemon 2>&1 | tee build.log
+          echo "---- EOF OF LOG ----"
+          tail -n 200 build.log || true
         shell: bash
 
-      - name: Upload debug APK
+      - name: Upload build log artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+
+      - name: Upload debug APK (if produced)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
