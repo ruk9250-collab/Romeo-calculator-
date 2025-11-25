@@ -14,22 +14,27 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      # JDK Setup aur Gradle Action ab ek hi step mein zyada behtar tarah se handle hote hain
+      - name: Set up JDK 17 & Configure Gradle
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: '17'
+          # Cache karne ke liye yeh line add ki hai, jo performance badhaati hai.
+          cache: 'gradle' 
 
-      - name: Ensure gradlew is executable
-        run: |
-          if [ -f ./gradlew ]; then
-            chmod +x ./gradlew || true
-            ls -l ./gradlew || true
-          else
-            echo "gradlew not found, continuing (gradle action will install gradle)"
-          fi
+      # Permssion ka masla hal karne ke liye yeh step zaroori hai.
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+        # Agar gradlew file maujood na ho (kisi wajah se), toh yeh step skip ho jaayega aur fail nahi hoga.
+        if: success() && steps.checkout.outcome == 'success' && hashFiles('gradlew') != '' 
+        # Note: Aapka pehla 'Ensure gradlew is executable' step bhi theek tha, 
+        # lekin yeh tareeqa zyada standard hai.
 
-      - name: Run Gradle assembleDebug (gradle action)
+      - name: Run Gradle assembleDebug
+        # Humne pehle hi JDK set kar diya hai, toh ab hum sirf 'run' command istemaal kar sakte hain.
+        # Lekin, aapka pehle wala 'gradle/gradle-build-action@v2' use karna bhi bilkul theek hai.
+        # Main aapke liye yahan par aapka originally use kiya gaya action hi rakhta hoon.
         uses: gradle/gradle-build-action@v2
         with:
           arguments: assembleDebug
@@ -39,3 +44,4 @@ jobs:
         with:
           name: app-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+
