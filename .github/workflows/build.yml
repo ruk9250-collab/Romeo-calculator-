@@ -42,7 +42,7 @@ jobs:
           ls -la "$ANDROID_SDK_ROOT/cmdline-tools"
         shell: bash
 
-      - name: Install required SDK packages (platforms + build-tools) safely
+      - name: Install required SDK packages (platforms + build-tools)
         env:
           ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
         run: |
@@ -53,7 +53,7 @@ jobs:
             exit 1
           fi
           chmod +x "$SDKMAN" || true
-          # accept licenses using printf to avoid 'yes' issues
+          # Accept licenses using printf instead of yes (reliable on runner)
           printf '%s\n' y y y | bash "$SDKMAN" --sdk_root="$ANDROID_SDK_ROOT" --licenses || true
           bash "$SDKMAN" --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
           bash "$SDKMAN" --sdk_root="$ANDROID_SDK_ROOT" --list || true
