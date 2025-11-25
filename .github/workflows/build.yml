@@ -1,14 +1,19 @@
-name: Android Build (assembleDebug - no wrapper)
+name: Android Build (use latest Gradle + update wrapper)
 
 on:
   push:
     branches: [ main, master ]
   workflow_dispatch:
 
+env:
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+  # Change this to a newer Gradle version if you want (e.g. 8.7, 8.8)
+  GRADLE_VERSION: 8.6
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - name: Checkout repository
@@ -20,11 +25,69 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Build with Gradle Action (no wrapper)
+      - name: Install prerequisites
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y unzip wget lib32z1
+
+      - name: Install Android commandline tools
+        run: |
+          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          cd /tmp
+          wget -q -O cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+          unzip -q cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
+          # ensure path layout cmdline-tools/latest
+          if [ -d "$ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools" ]; then
+            mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest || true
+          fi
+          ls -la $ANDROID_SDK_ROOT/cmdline-tools || true
+
+      - name: Install required SDK packages (platforms + build-tools)
+        env:
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
+          PATH: ${{ env.ANDROID_SDK_ROOT }}/cmdline-tools/latest/bin:${{ env.PATH }}
+        run: |
+          yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses || true
+          sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --list || true
+        shell: bash
+
+      - name: Make gradlew executable if present
+        run: |
+          if [ -f ./gradlew ]; then chmod +x ./gradlew || true; ls -l ./gradlew; else echo "no gradlew present"; fi
+
+      - name: Use Gradle action to ensure Gradle available
+        uses: gradle/gradle-build-action@v2
+        id: gradle_setup
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+          arguments: --version
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
+
+      - name: Update Gradle wrapper to configured latest (creates wrapper files)
+        # this uses the gradle installed by the previous action to run the wrapper task
+        run: |
+          echo "Updating gradle wrapper to $GRADLE_VERSION"
+          if [ -f ./gradlew ]; then
+            ./gradlew wrapper --gradle-version=$GRADLE_VERSION --distribution-type=all || true
+          else
+            # run wrapper task with the gradle binary we installed via gradle action
+            gradle wrapper --gradle-version=$GRADLE_VERSION --distribution-type=all || true
+          fi
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
+
+      - name: Build (assembleDebug) with verbose logs
         uses: gradle/gradle-build-action@v2
         with:
-          gradle-version: 8.6
-          arguments: assembleDebug
+          gradle-version: ${{ env.GRADLE_VERSION }}
+          arguments: assembleDebug --stacktrace --info --no-daemon
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
