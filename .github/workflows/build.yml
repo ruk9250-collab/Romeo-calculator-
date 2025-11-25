@@ -1,4 +1,4 @@
-name: Android Build
+name: Android Build (fixed SDK install + Gradle)
 
 on:
   push:
@@ -12,6 +12,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
 
     steps:
       - name: Checkout repository
@@ -23,7 +24,7 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Install prerequisites
+      - name: Install apt prerequisites
         run: |
           sudo apt-get update -y
           sudo apt-get install -y unzip wget lib32z1
@@ -31,42 +32,71 @@ jobs:
 
       - name: Download Android commandline tools
         run: |
-          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
           cd /tmp
-          wget -q -O tools.zip https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-          unzip -q tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
-          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
+          wget -q -O cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+          unzip -q cmdline-tools.zip -d "$ANDROID_SDK_ROOT/cmdline-tools"
+          # normalize path to .../cmdline-tools/latest
+          if [ -d "$ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools" ]; then
+            mv "$ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools" "$ANDROID_SDK_ROOT/cmdline-tools/latest" || true
+          fi
+          ls -la "$ANDROID_SDK_ROOT/cmdline-tools"
         shell: bash
 
-      - name: Install required SDK packages
+      - name: Make sdkmanager executable and install SDK packages (safe call)
         env:
-          PATH: ${{ env.ANDROID_SDK_ROOT }}/cmdline-tools/latest/bin:${{ env.PATH }}
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
         run: |
-          yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
-          sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          SDKMAN="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -f "$SDKMAN" ]; then
+            echo "sdkmanager not found at $SDKMAN"
+            ls -la "$ANDROID_SDK_ROOT/cmdline-tools" || true
+            exit 1
+          fi
+          chmod +x "$SDKMAN" || true
+          # Accept licenses (use printf instead of yes, call sdkmanager with bash explicitly)
+          printf '%s\n' y y y | bash "$SDKMAN" --sdk_root="$ANDROID_SDK_ROOT" --licenses || true
+          # Install required packages
+          bash "$SDKMAN" --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          # show installed packages (non-fatal)
+          bash "$SDKMAN" --sdk_root="$ANDROID_SDK_ROOT" --list || true
         shell: bash
 
       - name: Make gradlew executable if present
         run: |
-          if [ -f ./gradlew ]; then chmod +x ./gradlew; fi
+          if [ -f ./gradlew ]; then chmod +x ./gradlew || true; ls -l ./gradlew; else echo "no gradlew present"; fi
         shell: bash
 
-      - name: Use Gradle action
+      - name: Ensure Gradle available (setup via action)
         uses: gradle/gradle-build-action@v2
+        id: gradle_setup
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
 
-      - name: Update Gradle wrapper
+      - name: Optionally update wrapper (creates wrapper files matching GRADLE_VERSION)
         run: |
-          gradle wrapper --gradle-version=${GRADLE_VERSION} --distribution-type=all
+          # prefer using local ./gradlew if present, else use gradle installed by action
+          if [ -f ./gradlew ]; then
+            ./gradlew wrapper --gradle-version=${GRADLE_VERSION} --distribution-type=all || true
+          else
+            gradle wrapper --gradle-version=${GRADLE_VERSION} --distribution-type=all || true
+          fi
         shell: bash
 
-      - name: Build Debug APK
+      - name: Build (assembleDebug) with verbose logs
         run: |
-          ./gradlew assembleDebug --stacktrace --info
+          # prefer wrapper if present for consistent results
+          if [ -f ./gradlew ]; then
+            ./gradlew assembleDebug --stacktrace --info --no-daemon
+          else
+            gradle assembleDebug --stacktrace --info --no-daemon
+          fi
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
         shell: bash
 
-      - name: Upload APK
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
