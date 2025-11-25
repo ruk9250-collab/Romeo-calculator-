@@ -20,15 +20,7 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Set up Android SDK (minimal)
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 33
-          target: google_apis
-          arch: x86_64
-        # this action installs SDK packages required for building
-
-      - name: Run Gradle assembleDebug (using gradle action)
+      - name: Run Gradle assembleDebug (gradle action)
         uses: gradle/gradle-build-action@v2
         with:
           arguments: assembleDebug
