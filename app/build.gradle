@@ -4,12 +4,12 @@ plugins {
 }
 
 android {
-    namespace 'com.example.calc3d'
+    namespace 'com.example.calc3d'      // change if your package differs
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.example.calc3d"
-        minSdk 24
+        applicationId "com.example.calc3d"  // change to your app id if needed
+        minSdk 21
         targetSdk 34
         versionCode 1
         versionName "1.0"
@@ -21,18 +21,23 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_11
-        targetCompatibility JavaVersion.VERSION_11
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
+
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
     }
+
     buildFeatures {
         compose true
     }
+
     composeOptions {
-        kotlinCompilerExtensionVersion '1.6.0'
+        // Compose compiler extension that matches Compose libs used below
+        kotlinCompilerExtensionVersion = "1.6.0"
     }
 }
 
@@ -42,10 +47,18 @@ repositories {
 }
 
 dependencies {
+    // Use BOM to keep Compose versions coherent
+    implementation platform("androidx.compose:compose-bom:2024.10.00")
+
     implementation "androidx.core:core-ktx:1.12.0"
     implementation "androidx.activity:activity-compose:1.9.0"
-    implementation "androidx.compose.ui:ui:1.6.0"
-    implementation "androidx.compose.material3:material3:1.1.0"
-    implementation "androidx.compose.animation:animation:1.6.0"
+
+    implementation "androidx.compose.ui:ui"
+    implementation "androidx.compose.material3:material3"
+    implementation "androidx.compose.animation:animation"
+    implementation "androidx.compose.ui:ui-tooling-preview"
+    debugImplementation "androidx.compose.ui:ui-tooling"
+
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:${kotlin_version}"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
 }
